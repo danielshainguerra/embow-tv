@@ -1,6 +1,7 @@
-import java.util.Properties
-import java.io.FileInputStream
 import java.io.File
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,6 +15,7 @@ android {
         applicationId = "com.embow.tv"
         minSdk = 23
         targetSdk = 34
+
         versionCode = 1
         versionName = "1.0.0"
 
@@ -26,38 +28,55 @@ android {
 
     signingConfigs {
         create("release") {
+            // 1) Local option (keystore.properties)
             val keystorePropertiesFile = rootProject.file("keystore.properties")
-            if (keystorePropertiesFile.exists()) {
-                val keystoreProperties = java.util.Properties()
-                keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
 
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+            if (keystorePropertiesFile.exists()) {
+                val props = Properties()
+                FileInputStream(keystorePropertiesFile).use { props.load(it) }
+
+                // keystore.properties should contain:
+                // storeFile=release.jks
+                // storePassword=...
+                // keyAlias=...
+                // keyPassword=...
+                val storeFilePath = (props["storeFile"] as? String).orEmpty()
+
+                if (storeFilePath.isNotBlank()) {
+                    storeFile = file(storeFilePath)
+                    storePassword = (props["storePassword"] as? String).orEmpty()
+                    keyAlias = (props["keyAlias"] as? String).orEmpty()
+                    keyPassword = (props["keyPassword"] as? String).orEmpty()
+                }
             } else {
-                val keystoreFile = System.getenv("KEYSTORE_FILE")
-                if (keystoreFile != null) {
-                    storeFile = file(keystoreFile)
-                    storePassword = System.getenv("KEYSTORE_PASSWORD")
-                    keyAlias = System.getenv("KEY_ALIAS")
-                    keyPassword = System.getenv("KEY_PASSWORD")
+                // 2) CI option (env vars)
+                val keystorePath = System.getenv("KEYSTORE_PATH")
+                    ?: System.getenv("KEYSTORE_FILE") // legacy/alternate name
+
+                if (!keystorePath.isNullOrBlank()) {
+                    storeFile = File(keystorePath)
+                    storePassword = System.getenv("KEYSTORE_PASSWORD").orEmpty()
+                    keyAlias = System.getenv("KEY_ALIAS").orEmpty()
+                    keyPassword = System.getenv("KEY_PASSWORD").orEmpty()
                 }
             }
         }
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             isMinifyEnabled = false
             isShrinkResources = false
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
             signingConfig = signingConfigs.getByName("release")
         }
-        debug {
+
+        getByName("debug") {
             isMinifyEnabled = false
         }
     }
