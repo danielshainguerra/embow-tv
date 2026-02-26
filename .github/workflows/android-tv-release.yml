@@ -13,15 +13,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # ✅ Pasamos secrets a ENV (esto SÍ está permitido)
-    env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,10 +34,10 @@ jobs:
       # Keystore (only for Release)
       # -------------------------
       - name: Decode Keystore
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         shell: bash
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/release.jks"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$GITHUB_WORKSPACE/release.jks"
           ls -la "$GITHUB_WORKSPACE/release.jks"
           echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/release.jks" >> $GITHUB_ENV
           echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/release.jks" >> $GITHUB_ENV
@@ -55,7 +46,10 @@ jobs:
       # Debug build (no keystore)
       # -------------------------
       - name: Build Debug APK
-        if: ${{ env.KEYSTORE_BASE64 == '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         shell: bash
         run: |
           ./gradlew clean :app:assembleDebug
@@ -64,13 +58,25 @@ jobs:
       # Release builds (signed)
       # -------------------------
       - name: Build Release APK
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         shell: bash
         run: |
           ./gradlew clean :app:assembleRelease
 
       - name: Build Release AAB
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         shell: bash
         run: |
           ./gradlew :app:bundleRelease
@@ -79,7 +85,7 @@ jobs:
       # Upload artifacts
       # -------------------------
       - name: Upload Debug APK Artifact
-        if: ${{ env.KEYSTORE_BASE64 == '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: embow-tv-apk-debug
@@ -87,7 +93,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Release APK Artifact
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: embow-tv-apk-release
@@ -95,15 +101,18 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Release AAB Artifact
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: embow-tv-aab-release
           path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
 
+      # -------------------------
+      # Cleanup
+      # -------------------------
       - name: Cleanup
         if: always()
         shell: bash
         run: |
-          rm -f "$GITHUB_WORKSPACE/release.jks"
+          rm -f "$GITHUB_WORKSPACE/release.jks"# touch Wed Feb 25 22:20:18 CST 2026
